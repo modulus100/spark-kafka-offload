@@ -1,0 +1,8 @@
+version: v2
+plugins:
+  - protoc_builtin: java
+    out: ../generated/java
+  - protoc_builtin: python
+    out: ../generated/python
+  - local: protoc-gen-mypy
+    out: ../generated/python
