@@ -19,7 +19,12 @@ export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
 export KAFKA_TOPIC="${KAFKA_TOPIC:-demo.protobuf}"
 export KAFKA_STARTING_OFFSETS="${KAFKA_STARTING_OFFSETS:-latest}"
 
-export CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION:-/tmp/spark-kafka-consumer-checkpoint-$(date +%s)}"
+export S3_ENDPOINT="${S3_ENDPOINT:-http://localhost:9000}"
+export S3_ACCESS_KEY="${S3_ACCESS_KEY:-admin}"
+export S3_SECRET_KEY="${S3_SECRET_KEY:-password}"
+
+# You can use local FS or S3A. Default to S3A (MinIO) for realistic checkpointing.
+export CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION:-s3a://datalake/checkpoints/kafka-consumer/$(date +%s)}"
 
 # Run two console sinks from the same job: one for payload and one for headers.
 export DUAL_STREAM="${DUAL_STREAM:-true}"

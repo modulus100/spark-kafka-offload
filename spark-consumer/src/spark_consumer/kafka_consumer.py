@@ -26,13 +26,23 @@ def main() -> None:
         "com.acme.spark.StripConfluentProtobufUdf",
     )
 
+    s3_endpoint = os.environ.get("S3_ENDPOINT", "http://localhost:9000")
+    s3_access_key = os.environ.get("S3_ACCESS_KEY", "admin")
+    s3_secret_key = os.environ.get("S3_SECRET_KEY", "password")
+
     spark = (
         SparkSession.builder.appName("kafka-consumer-debug")
         .config(
             "spark.jars.packages",
             "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.2,"
-            "org.apache.spark:spark-protobuf_2.12:3.5.2",
+            "org.apache.spark:spark-protobuf_2.12:3.5.2,"
+            "org.apache.hadoop:hadoop-aws:3.3.4",
         )
+        .config("spark.hadoop.fs.s3a.endpoint", s3_endpoint)
+        .config("spark.hadoop.fs.s3a.access.key", s3_access_key)
+        .config("spark.hadoop.fs.s3a.secret.key", s3_secret_key)
+        .config("spark.hadoop.fs.s3a.path.style.access", "true")
+        .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
         .getOrCreate()
     )
 

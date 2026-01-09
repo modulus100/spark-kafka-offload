@@ -18,7 +18,11 @@ java -version
 export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
 export KAFKA_TOPIC="${KAFKA_TOPIC:-demo.protobuf}"
 
-export CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION:-/tmp/spark-iceberg-ingestion-checkpoint-$(date +%s)}"
+export S3_ENDPOINT="${S3_ENDPOINT:-http://localhost:9000}"
+export S3_ACCESS_KEY="${S3_ACCESS_KEY:-admin}"
+export S3_SECRET_KEY="${S3_SECRET_KEY:-password}"
+
+export CHECKPOINT_LOCATION="${CHECKPOINT_LOCATION:-s3a://datalake/checkpoints/kafka-to-iceberg/$(date +%s)}"
 
 export PYTHONPATH="${REPO_ROOT}/generated/python:${SCRIPT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
@@ -27,10 +31,6 @@ export ICEBERG_CATALOG_URI="${ICEBERG_CATALOG_URI:-http://localhost:8181}"
 export ICEBERG_WAREHOUSE="${ICEBERG_WAREHOUSE:-s3://datalake/warehouse}"
 export ICEBERG_NAMESPACE="${ICEBERG_NAMESPACE:-demo}"
 export ICEBERG_TABLE="${ICEBERG_TABLE:-demo_events}"
-
-export S3_ENDPOINT="${S3_ENDPOINT:-http://localhost:9000}"
-export S3_ACCESS_KEY="${S3_ACCESS_KEY:-admin}"
-export S3_SECRET_KEY="${S3_SECRET_KEY:-password}"
 
 # Iceberg S3FileIO uses AWS SDK credentials/region resolution.
 export AWS_REGION="${AWS_REGION:-us-east-1}"

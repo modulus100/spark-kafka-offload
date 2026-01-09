@@ -106,7 +106,10 @@ def main() -> None:
         decoded.writeStream.foreachBatch(_write_to_iceberg)
         .option(
             "checkpointLocation",
-            os.environ.get("CHECKPOINT_LOCATION", "/tmp/spark-consumer-checkpoint"),
+            os.environ.get(
+                "CHECKPOINT_LOCATION",
+                "s3a://datalake/checkpoints/kafka-to-iceberg",
+            ),
         )
         .start()
     )
