@@ -114,6 +114,18 @@ services:
       CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
       CATALOG_S3_ENDPOINT: http://minio:9000
 
+  trino:
+    image: trinodb/trino:latest
+    hostname: trino
+    container_name: trino
+    depends_on:
+      - iceberg-rest
+      - minio
+    ports:
+      - "8083:8080"
+    volumes:
+      - ./.docker/trino/etc:/etc/trino
+
 volumes:
   kafka-data:
   minio-data:
