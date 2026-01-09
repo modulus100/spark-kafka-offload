@@ -5,6 +5,9 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +34,15 @@ public class DemoEventPublisher {
                 .setPayload("hello from spring")
                 .build();
 
-        kafkaTemplate.send(topic, id, event);
+        Message<DemoEvent> message = MessageBuilder.withPayload(event)
+                .setHeader(KafkaHeaders.TOPIC, topic)
+                .setHeader(KafkaHeaders.KEY, id)
+                .setHeader("ce_id", id)
+                .setHeader("ce_specversion", "1.0")
+                .setHeader("ce_type", "com.acme.demo.v1.DemoEvent")
+                .setHeader("ce_source", "urn:acme:producer")
+                .build();
+
+        kafkaTemplate.send(message);
     }
 }
