@@ -44,6 +44,20 @@ uv sync
 mkdir -p "${REPO_ROOT}/proto/descriptors"
 PATH="$HOME/.local/bin:$PATH" buf build --as-file-descriptor-set -o "${REPO_ROOT}/proto/descriptors/demo.desc" "${REPO_ROOT}/proto"
 
+export USE_S3_DESCRIPTOR="${USE_S3_DESCRIPTOR:-true}"
+export UPLOAD_DESCRIPTOR="${UPLOAD_DESCRIPTOR:-false}"
+export DESCRIPTOR_BUCKET="${DESCRIPTOR_BUCKET:-proto-artifacts}"
+export DESCRIPTOR_KEY="${DESCRIPTOR_KEY:-descriptors/demo.desc}"
+export DESCRIPTOR_FILE="${DESCRIPTOR_FILE:-proto/descriptors/demo.desc}"
+
+if [[ "${USE_S3_DESCRIPTOR}" == "true" || "${USE_S3_DESCRIPTOR}" == "1" || "${USE_S3_DESCRIPTOR}" == "yes" ]]; then
+  export PROTO_DESCRIPTOR_PATH="${PROTO_DESCRIPTOR_PATH:-s3a://${DESCRIPTOR_BUCKET}/${DESCRIPTOR_KEY}}"
+
+  if [[ "${UPLOAD_DESCRIPTOR}" == "true" || "${UPLOAD_DESCRIPTOR}" == "1" || "${UPLOAD_DESCRIPTOR}" == "yes" ]]; then
+    (cd "${REPO_ROOT}" && ./gradlew --no-configuration-cache :s3-upload:uploadDescriptor)
+  fi
+fi
+
 (cd "${REPO_ROOT}" && ./gradlew --no-configuration-cache :spark-udf:jar)
 
 export PROTO_DESCRIPTOR_PATH="${PROTO_DESCRIPTOR_PATH:-${REPO_ROOT}/proto/descriptors/demo.desc}"

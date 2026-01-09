@@ -17,4 +17,4 @@ plugins {
 }
 
 rootProject.name = "spark-kafka-offload"
-include("producer", "spark-udf")
+include("producer", "spark-udf", "s3-upload")

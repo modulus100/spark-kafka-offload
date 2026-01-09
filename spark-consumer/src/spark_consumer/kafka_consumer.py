@@ -7,6 +7,8 @@ from pyspark.sql.functions import col, expr
 from pyspark.sql.protobuf.functions import from_protobuf
 from pyspark.sql.types import BinaryType
 
+from spark_consumer.descriptor_reader import local_descriptor_path
+
 
 def main() -> None:
     topic = os.environ.get("KAFKA_TOPIC", "demo.protobuf")
@@ -46,6 +48,8 @@ def main() -> None:
         .getOrCreate()
     )
 
+    descriptor_path_local = local_descriptor_path(spark, descriptor_path)
+
     spark.udf.registerJavaFunction(udf_name, udf_class, BinaryType())
 
     df = (
@@ -83,7 +87,7 @@ def main() -> None:
             col("headers").getItem("ce_specversion").alias("ce_specversion"),
             col("headers").getItem("ce_type").alias("ce_type"),
             col("headers").getItem("ce_source").alias("ce_source"),
-            from_protobuf(expr(f"{udf_name}(value)"), message_name, descriptor_path).alias("msg"),
+            from_protobuf(expr(f"{udf_name}(value)"), message_name, descriptor_path_local).alias("msg"),
         )
         payload_out = decoded.select(
             "topic",

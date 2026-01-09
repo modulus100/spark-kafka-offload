@@ -7,6 +7,8 @@ from pyspark.sql.functions import col, current_timestamp, expr
 from pyspark.sql.protobuf.functions import from_protobuf
 from pyspark.sql.types import BinaryType
 
+from spark_consumer.descriptor_reader import local_descriptor_path
+
 
 def _write_to_iceberg(batch_df, batch_id: int) -> None:
     spark = batch_df.sparkSession
@@ -84,6 +86,8 @@ def main() -> None:
         .getOrCreate()
     )
 
+    descriptor_path_local = local_descriptor_path(spark, descriptor_path)
+
     spark.udf.registerJavaFunction(udf_name, udf_class, BinaryType())
 
     df = (
@@ -95,7 +99,7 @@ def main() -> None:
     )
 
     decoded = df.select(
-        from_protobuf(expr(f"{udf_name}(value)"), message_name, descriptor_path).alias("msg")
+        from_protobuf(expr(f"{udf_name}(value)"), message_name, descriptor_path_local).alias("msg")
     ).select(
         col("msg.id").alias("id"),
         col("msg.payload").alias("payload"),
