@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package acme.test.v1;
+
+option java_multiple_files = true;
+option java_package = "com.acme.test.v1";
+
+import "acme/test/v1/base.proto";
+import "acme/test/v1/common.proto";
+
+message Root {
+  Base base = 1;
+  Common common = 2;
+}

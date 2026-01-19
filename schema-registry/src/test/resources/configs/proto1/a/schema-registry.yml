@@ -1,0 +1,4 @@
+schemaRegistryUrl: http://one
+entries:
+  - topic: demo.protobuf
+    messageClass: com.acme.demo.v1.DemoEvent

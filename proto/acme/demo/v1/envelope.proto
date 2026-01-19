@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package acme.demo.v1;
+
+option java_multiple_files = true;
+option java_package = "com.acme.demo.v1";
+
+import "acme/demo/v1/demo.proto";
+
+message DemoEnvelope {
+  DemoEvent event = 1;
+  map<string, string> headers = 2;
+}

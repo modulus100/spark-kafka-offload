@@ -1,0 +1,7 @@
+schemaRegistryUrl: http://localhost:8081
+clientCacheCapacity: 1000
+entries:
+  - topic: demo.protobuf
+    messageClass: com.acme.demo.v1.DemoEvent
+    subjectStrategy: topic-record-name
+    compatibility: BACKWARD
