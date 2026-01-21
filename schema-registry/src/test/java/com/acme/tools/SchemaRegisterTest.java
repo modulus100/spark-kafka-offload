@@ -20,7 +20,6 @@ class SchemaRegisterTest {
     @Test
     void registerAll_happyPath_registersThenSkipsWhenAlreadyRegistered() throws Exception {
         MockSchemaRegistryClient client = new MockSchemaRegistryClient(List.of(new ProtobufSchemaProvider()));
-        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf",
@@ -32,24 +31,16 @@ class SchemaRegisterTest {
 
         Options options = new Options(false, true, true);
 
-        RegistrationResult first = registrar.registerAll(
-                client,
-                "mock://schema-registry",
-                List.of(entry),
-                options
-        );
+        SchemaRegister registrar = new SchemaRegister(client, "mock://schema-registry", options);
+
+        RegistrationResult first = registrar.registerAll(List.of(entry));
 
         assertEquals(1, first.registered());
         assertEquals(0, first.alreadyRegistered());
         assertEquals(0, first.incompatible());
         assertTrue(client.getAllSubjects().contains("demo.protobuf-" + DemoEvent.getDescriptor().getFullName()));
 
-        RegistrationResult second = registrar.registerAll(
-                client,
-                "mock://schema-registry",
-                List.of(entry),
-                options
-        );
+        RegistrationResult second = registrar.registerAll(List.of(entry));
 
         assertEquals(0, second.registered());
         assertEquals(1, second.alreadyRegistered());
@@ -59,7 +50,6 @@ class SchemaRegisterTest {
     @Test
     void registerAll_topicRecordNameStrategy_usesTopicAndRecordFullNameAsSubject() throws Exception {
         MockSchemaRegistryClient client = new MockSchemaRegistryClient(List.of(new ProtobufSchemaProvider()));
-        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf",
@@ -71,12 +61,9 @@ class SchemaRegisterTest {
 
         Options options = new Options(false, true, false);
 
-        RegistrationResult r = registrar.registerAll(
-                client,
-                "mock://schema-registry",
-                List.of(entry),
-                options
-        );
+        SchemaRegister registrar = new SchemaRegister(client, "mock://schema-registry", options);
+
+        RegistrationResult r = registrar.registerAll(List.of(entry));
 
         assertEquals(1, r.registered());
         assertTrue(client.getAllSubjects().contains("demo.protobuf-" + DemoEvent.getDescriptor().getFullName()));
@@ -85,7 +72,6 @@ class SchemaRegisterTest {
     @Test
     void registerAll_dryRun_doesNotRegister() throws Exception {
         MockSchemaRegistryClient client = new MockSchemaRegistryClient(List.of(new ProtobufSchemaProvider()));
-        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf",
@@ -97,12 +83,9 @@ class SchemaRegisterTest {
 
         Options options = new Options(true, true, true);
 
-        RegistrationResult r = registrar.registerAll(
-                client,
-                "mock://schema-registry",
-                List.of(entry),
-                options
-        );
+        SchemaRegister registrar = new SchemaRegister(client, "mock://schema-registry", options);
+
+        RegistrationResult r = registrar.registerAll(List.of(entry));
 
         assertEquals(0, r.registered());
         assertEquals(0, r.alreadyRegistered());
@@ -113,7 +96,6 @@ class SchemaRegisterTest {
     @Test
     void registerAll_incompatible_whenFailOnIncompatible_skipsRegisterAndCountsIncompatible() throws Exception {
         MockSchemaRegistryClient client = new MockSchemaRegistryClient(List.of(new ProtobufSchemaProvider()));
-        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf",
@@ -132,12 +114,9 @@ class SchemaRegisterTest {
         );
 
         Options options = new Options(false, true, false);
-        RegistrationResult r = registrar.registerAll(
-                client,
-                "mock://schema-registry",
-                List.of(entry),
-                options
-        );
+
+        SchemaRegister registrar = new SchemaRegister(client, "mock://schema-registry", options);
+        RegistrationResult r = registrar.registerAll(List.of(entry));
 
         assertEquals(0, r.registered());
         assertEquals(0, r.alreadyRegistered());
@@ -182,8 +161,6 @@ class SchemaRegisterTest {
 
     @Test
     void collectEntries_collectsEntriesWithoutCompatibilityInheritance() {
-        SchemaRegister registrar = new SchemaRegister();
-
         SchemaEntry e1 = new SchemaEntry(
                 "demo.protobuf",
                 DemoEvent.class.getName(),
@@ -202,16 +179,15 @@ class SchemaRegisterTest {
 
         RegistrarConfig cfg = new RegistrarConfig(null, List.of(e1, e2));
 
-        List<SchemaEntry> entries = registrar.collectEntries(List.of(cfg));
-        assertEquals(2, entries.size());
-        assertNull(entries.get(0).compatibility());
-        assertEquals("NONE", entries.get(1).compatibility());
+        List<SchemaEntry> schemas = SchemaRegister.collectSchemas(List.of(cfg));
+        assertEquals(2, schemas.size());
+        assertNull(schemas.get(0).compatibility());
+        assertEquals("NONE", schemas.get(1).compatibility());
     }
 
     @Test
     void registerAll_setsCompatibilityToBackwardTransitiveByDefault() throws Exception {
         MockSchemaRegistryClient client = new MockSchemaRegistryClient();
-        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry1 = new SchemaEntry(
                 "demo.protobuf",
@@ -224,12 +200,8 @@ class SchemaRegisterTest {
 
         Options options = new Options(false, true, false);
 
-        registrar.registerAll(
-                client,
-                "mock://schema-registry",
-                List.of(entry1),
-                options
-        );
+        SchemaRegister registrar = new SchemaRegister(client, "mock://schema-registry", options);
+        registrar.registerAll(List.of(entry1));
 
         String subject = "demo.protobuf-" + DemoEvent.getDescriptor().getFullName();
         assertEquals("BACKWARD_TRANSITIVE", client.getConfig(subject).getCompatibilityLevel());
@@ -238,7 +210,6 @@ class SchemaRegisterTest {
     @Test
     void registerAll_setsDifferentCompatibilityModes_perEntryAndNormalizesValue() throws Exception {
         MockSchemaRegistryClient client = new MockSchemaRegistryClient();
-        SchemaRegister registrar = new SchemaRegister();
 
         String recordFullName = DemoEvent.getDescriptor().getFullName();
 
@@ -268,12 +239,8 @@ class SchemaRegisterTest {
 
         Options options = new Options(false, true, false);
 
-        registrar.registerAll(
-                client,
-                "mock://schema-registry",
-                List.of(full, forward, none),
-                options
-        );
+        SchemaRegister registrar = new SchemaRegister(client, "mock://schema-registry", options);
+        registrar.registerAll(List.of(full, forward, none));
 
         assertEquals("FULL", client.getConfig("demo.full-" + recordFullName).getCompatibilityLevel());
         assertEquals("FORWARD", client.getConfig("demo.forward-" + recordFullName).getCompatibilityLevel());
@@ -285,10 +252,9 @@ class SchemaRegisterTest {
             tools.jackson.databind.ObjectMapper mapper,
             CliArgs args
     ) throws Exception {
-        SchemaRegister registrar = new SchemaRegister();
         var m = SchemaRegister.class.getDeclaredMethod("loadConfigs", tools.jackson.databind.ObjectMapper.class, CliArgs.class);
         m.setAccessible(true);
-        return (List<RegistrarConfig>) m.invoke(registrar, mapper, args);
+        return (List<RegistrarConfig>) m.invoke(null, mapper, args);
     }
 
     private static String readResource(String path) throws Exception {

@@ -4,12 +4,41 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Parsed CLI arguments for {@link SchemaRegister}.
+ */
 final class CliArgs {
+
+    /**
+     * Explicit config file paths provided via {@code --config <path>}.
+     */
     final List<String> configPaths;
+
+    /**
+     * Directories to scan recursively for {@code schema-registry.yml} via {@code --config-dir <dir>}.
+     */
     final List<String> configDirs;
+
+    /**
+     * If true, do not register schemas or update compatibility in Schema Registry.
+     *
+     * The tool may still resolve schemas and perform compatibility checks to show what would happen.
+     */
     final boolean dryRun;
+
+    /**
+     * If true, stop processing an entry when the candidate schema is incompatible with an existing subject.
+     */
     final boolean failOnIncompatible;
+
+    /**
+     * If true, emit more detailed logs about what the tool is doing.
+     */
     final boolean verbose;
+
+    /**
+     * Schema Registry base URL provided via {@code --schema-registry-url <url>}.
+     */
     final Optional<String> schemaRegistryUrlOverride;
 
     private CliArgs(

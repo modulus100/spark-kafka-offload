@@ -33,6 +33,13 @@ record RegistrarConfig(Integer clientCacheCapacity, List<SchemaEntry> schemas) {
 record SchemaEntry(String topic, String mainMessageClass, String subject, String subjectStrategy, String compatibility) {
 }
 
+/**
+ * Runtime flags controlling how schema registration behaves.
+ *
+ * @param dryRun if true, do not register schemas or update compatibility; only log what would happen
+ * @param failOnIncompatible if true, skip registration for incompatible schemas (and the CLI exits with a non-zero code)
+ * @param verbose if true, emit more detailed logs
+ */
 record Options(boolean dryRun, boolean failOnIncompatible, boolean verbose) {}
 
 record RegistrationResult(int registered, int alreadyRegistered, int dryRun, int incompatible) {}
@@ -43,29 +50,37 @@ public final class SchemaRegister {
 
     private static final Logger log = LoggerFactory.getLogger(SchemaRegister.class);
 
-    public SchemaRegister() {}
+    private final SchemaRegistryClient client;
+    private final String schemaRegistryUrl;
+    private final Options options;
+    private final KafkaProtobufSerializer<Message> serializer;
+
+    public SchemaRegister(SchemaRegistryClient client, String schemaRegistryUrl, Options options) {
+        this.client = Objects.requireNonNull(client, "client");
+        this.schemaRegistryUrl = Objects.requireNonNull(schemaRegistryUrl, "schemaRegistryUrl");
+        this.options = Objects.requireNonNull(options, "options");
+        this.serializer = createSerializer(this.client, this.schemaRegistryUrl);
+    }
 
     public static void main(String[] args) throws Exception {
         CliArgs cli = CliArgs.parse(args);
 
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
 
-        SchemaRegister registrar = new SchemaRegister();
-
-        List<RegistrarConfig> configs = registrar.loadConfigs(mapper, cli);
+        List<RegistrarConfig> configs = loadConfigs(mapper, cli);
         if (configs.isEmpty()) {
             throw new IllegalArgumentException("No config files found");
         }
 
-        List<SchemaEntry> entries = registrar.collectEntries(configs);
+        List<SchemaEntry> schemas = collectSchemas(configs);
         Integer cacheCapacity = null;
         for (RegistrarConfig cfg : configs) {
             if (cacheCapacity == null) {
                 cacheCapacity = cfg.clientCacheCapacity();
             }
         }
-        if (entries.isEmpty()) {
-            throw new IllegalArgumentException("No entries found in config(s)");
+        if (schemas.isEmpty()) {
+            throw new IllegalArgumentException("No schemas found in config(s)");
         }
 
         String schemaRegistryUrl = cli.schemaRegistryUrlOverride
@@ -82,7 +97,8 @@ public final class SchemaRegister {
         );
 
         Options options = new Options(cli.dryRun, cli.failOnIncompatible, cli.verbose);
-        RegistrationResult result = registrar.registerAll(client, schemaRegistryUrl, entries, options);
+        SchemaRegister registerer = new SchemaRegister(client, schemaRegistryUrl, options);
+        RegistrationResult result = registerer.registerAll(schemas);
 
         if (result.incompatible() > 0 && cli.failOnIncompatible) {
             System.err.println("Incompatible schemas: " + result.incompatible());
@@ -90,24 +106,15 @@ public final class SchemaRegister {
         }
     }
 
-    RegistrationResult registerAll(
-            SchemaRegistryClient client,
-            String schemaRegistryUrl,
-            List<SchemaEntry> entries,
-            Options options
-    ) throws Exception {
-        Objects.requireNonNull(client, "client");
-        Objects.requireNonNull(schemaRegistryUrl, "schemaRegistryUrl");
-        Objects.requireNonNull(entries, "entries");
-        Objects.requireNonNull(options, "options");
+    RegistrationResult registerAll(List<SchemaEntry> schemas) throws Exception {
+        Objects.requireNonNull(schemas, "schemas");
 
         int incompatible = 0;
         int registered = 0;
         int alreadyRegistered = 0;
         int dryRun = 0;
-        KafkaProtobufSerializer<Message> serializer = createSerializer(client, schemaRegistryUrl);
 
-        for (SchemaEntry entry : entries) {
+        for (SchemaEntry entry : schemas) {
             RegistrationContext ctx = buildContext(entry);
 
             String compatibility = normalizeCompatibility(entry.compatibility());
@@ -153,7 +160,7 @@ public final class SchemaRegister {
         return new RegistrationResult(registered, alreadyRegistered, dryRun, incompatible);
     }
 
-    private KafkaProtobufSerializer<Message> createSerializer(SchemaRegistryClient client, String schemaRegistryUrl) {
+    private static KafkaProtobufSerializer<Message> createSerializer(SchemaRegistryClient client, String schemaRegistryUrl) {
         KafkaProtobufSerializer<Message> serializer = new KafkaProtobufSerializer<>(client);
 
         Map<String, Object> cfg = new HashMap<>();
@@ -276,22 +283,22 @@ public final class SchemaRegister {
         log.info("[REGISTERED] subject={} id={} messageClass={}", ctx.subject(), newId, ctx.messageClass());
     }
 
-    List<SchemaEntry> collectEntries(List<RegistrarConfig> configs) {
+    static List<SchemaEntry> collectSchemas(List<RegistrarConfig> configs) {
         Objects.requireNonNull(configs, "configs");
 
-        List<SchemaEntry> entries = new ArrayList<>();
+        List<SchemaEntry> schemas = new ArrayList<>();
         for (RegistrarConfig cfg : configs) {
             if (cfg == null || cfg.schemas() == null) {
                 log.warn("Skipping config because it is missing schemas. config={}", cfg);
                 continue;
             }
 
-            entries.addAll(cfg.schemas());
+            schemas.addAll(cfg.schemas());
         }
-        return entries;
+        return schemas;
     }
 
-    List<RegistrarConfig> loadConfigs(ObjectMapper mapper, CliArgs cli) throws IOException {
+    static List<RegistrarConfig> loadConfigs(ObjectMapper mapper, CliArgs cli) throws IOException {
         Objects.requireNonNull(mapper, "mapper");
         Objects.requireNonNull(cli, "cli");
 

@@ -103,13 +103,8 @@ class SchemaRegisterIT {
         );
 
         Options options = new Options(false, true, false);
-        SchemaRegister registrar = new SchemaRegister();
-        RegistrationResult result = registrar.registerAll(
-                client,
-                url,
-                List.of(entry),
-                options
-        );
+        SchemaRegister registrar = new SchemaRegister(client, url, options);
+        RegistrationResult result = registrar.registerAll(List.of(entry));
 
         assertEquals(1, result.registered());
         String subject = "demo.protobuf-" + DemoEvent.getDescriptor().getFullName();
@@ -238,8 +233,6 @@ class SchemaRegisterIT {
                 Map.of()
         );
 
-        SchemaRegister registrar = new SchemaRegister();
-
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf.registrar.refs",
                 Root.class.getName(),
@@ -249,12 +242,8 @@ class SchemaRegisterIT {
         );
 
         Options options = new Options(false, true, false);
-        RegistrationResult result = registrar.registerAll(
-                client,
-                url,
-                List.of(entry),
-                options
-        );
+        SchemaRegister registrar = new SchemaRegister(client, url, options);
+        RegistrationResult result = registrar.registerAll(List.of(entry));
 
         assertEquals(1, result.registered());
 
@@ -287,8 +276,6 @@ class SchemaRegisterIT {
                 Map.of()
         );
 
-        SchemaRegister registrar = new SchemaRegister();
-
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf.registrar.refs.compat",
                 Root.class.getName(),
@@ -298,12 +285,8 @@ class SchemaRegisterIT {
         );
 
         Options options = new Options(false, true, false);
-        registrar.registerAll(
-                client,
-                url,
-                List.of(entry),
-                options
-        );
+        SchemaRegister registrar = new SchemaRegister(client, url, options);
+        registrar.registerAll(List.of(entry));
 
         String rootSubject = entry.topic() + "-" + Root.getDescriptor().getFullName();
         var rootMeta = client.getLatestSchemaMetadata(rootSubject);
