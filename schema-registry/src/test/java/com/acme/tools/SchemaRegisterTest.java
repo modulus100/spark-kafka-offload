@@ -6,6 +6,7 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,12 +15,12 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class SchemaRegistryRegisterTest {
+class SchemaRegisterTest {
 
     @Test
     void registerAll_happyPath_registersThenSkipsWhenAlreadyRegistered() throws Exception {
         MockSchemaRegistryClient client = new MockSchemaRegistryClient(List.of(new ProtobufSchemaProvider()));
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf",
@@ -58,7 +59,7 @@ class SchemaRegistryRegisterTest {
     @Test
     void registerAll_topicRecordNameStrategy_usesTopicAndRecordFullNameAsSubject() throws Exception {
         MockSchemaRegistryClient client = new MockSchemaRegistryClient(List.of(new ProtobufSchemaProvider()));
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf",
@@ -84,7 +85,7 @@ class SchemaRegistryRegisterTest {
     @Test
     void registerAll_dryRun_doesNotRegister() throws Exception {
         MockSchemaRegistryClient client = new MockSchemaRegistryClient(List.of(new ProtobufSchemaProvider()));
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf",
@@ -111,8 +112,8 @@ class SchemaRegistryRegisterTest {
 
     @Test
     void registerAll_incompatible_whenFailOnIncompatible_skipsRegisterAndCountsIncompatible() throws Exception {
-        AlwaysIncompatibleMockSchemaRegistryClient client = new AlwaysIncompatibleMockSchemaRegistryClient();
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        MockSchemaRegistryClient client = new MockSchemaRegistryClient(List.of(new ProtobufSchemaProvider()));
+        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf",
@@ -123,8 +124,8 @@ class SchemaRegistryRegisterTest {
         );
 
         // Make the subject exist so compatibility is checked
-        String incompatibleProto = readResource("/proto/acme/demo/v1/demo_event_incompatible.proto");
         String subject = "demo.protobuf-" + DemoEvent.getDescriptor().getFullName();
+        String incompatibleProto = readResource("/proto/acme/demo/v1/demo_event_incompatible.proto");
         client.register(
                 subject,
                 new io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema(incompatibleProto)
@@ -177,13 +178,11 @@ class SchemaRegistryRegisterTest {
         List<RegistrarConfig> configs = invokeLoadConfigs(mapper, args);
 
         assertEquals(2, configs.size());
-        assertEquals("http://one", configs.get(0).schemaRegistryUrl());
-        assertEquals("http://two", configs.get(1).schemaRegistryUrl());
     }
 
     @Test
     void collectEntries_collectsEntriesWithoutCompatibilityInheritance() {
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry e1 = new SchemaEntry(
                 "demo.protobuf",
@@ -201,7 +200,7 @@ class SchemaRegistryRegisterTest {
                 "NONE"
         );
 
-        RegistrarConfig cfg = new RegistrarConfig(null, null, List.of(e1, e2));
+        RegistrarConfig cfg = new RegistrarConfig(null, List.of(e1, e2));
 
         List<SchemaEntry> entries = registrar.collectEntries(List.of(cfg));
         assertEquals(2, entries.size());
@@ -210,9 +209,9 @@ class SchemaRegistryRegisterTest {
     }
 
     @Test
-    void registerAll_setsCompatibilityToBackwardByDefault() throws Exception {
-        TrackingCompatibilityMockSchemaRegistryClient client = new TrackingCompatibilityMockSchemaRegistryClient();
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+    void registerAll_setsCompatibilityToBackwardTransitiveByDefault() throws Exception {
+        MockSchemaRegistryClient client = new MockSchemaRegistryClient();
+        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry1 = new SchemaEntry(
                 "demo.protobuf",
@@ -233,13 +232,13 @@ class SchemaRegistryRegisterTest {
         );
 
         String subject = "demo.protobuf-" + DemoEvent.getDescriptor().getFullName();
-        assertEquals("BACKWARD", client.lastCompatibilityBySubject.get(subject));
+        assertEquals("BACKWARD_TRANSITIVE", client.getConfig(subject).getCompatibilityLevel());
     }
 
     @Test
     void registerAll_setsDifferentCompatibilityModes_perEntryAndNormalizesValue() throws Exception {
-        TrackingCompatibilityMockSchemaRegistryClient client = new TrackingCompatibilityMockSchemaRegistryClient();
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        MockSchemaRegistryClient client = new MockSchemaRegistryClient();
+        SchemaRegister registrar = new SchemaRegister();
 
         String recordFullName = DemoEvent.getDescriptor().getFullName();
 
@@ -276,9 +275,9 @@ class SchemaRegistryRegisterTest {
                 options
         );
 
-        assertEquals("FULL", client.lastCompatibilityBySubject.get("demo.full-" + recordFullName));
-        assertEquals("FORWARD", client.lastCompatibilityBySubject.get("demo.forward-" + recordFullName));
-        assertEquals("NONE", client.lastCompatibilityBySubject.get("demo.none-" + recordFullName));
+        assertEquals("FULL", client.getConfig("demo.full-" + recordFullName).getCompatibilityLevel());
+        assertEquals("FORWARD", client.getConfig("demo.forward-" + recordFullName).getCompatibilityLevel());
+        assertEquals("NONE", client.getConfig("demo.none-" + recordFullName).getCompatibilityLevel());
     }
 
     @SuppressWarnings("unchecked")
@@ -286,40 +285,14 @@ class SchemaRegistryRegisterTest {
             tools.jackson.databind.ObjectMapper mapper,
             CliArgs args
     ) throws Exception {
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
-        var m = SchemaRegistryRegister.class.getDeclaredMethod("loadConfigs", tools.jackson.databind.ObjectMapper.class, CliArgs.class);
+        SchemaRegister registrar = new SchemaRegister();
+        var m = SchemaRegister.class.getDeclaredMethod("loadConfigs", tools.jackson.databind.ObjectMapper.class, CliArgs.class);
         m.setAccessible(true);
         return (List<RegistrarConfig>) m.invoke(registrar, mapper, args);
     }
 
-    static final class AlwaysIncompatibleMockSchemaRegistryClient extends MockSchemaRegistryClient {
-
-        AlwaysIncompatibleMockSchemaRegistryClient() {
-            super(List.of(new ProtobufSchemaProvider()));
-        }
-
-        @Override
-        public boolean testCompatibility(String subject, io.confluent.kafka.schemaregistry.ParsedSchema schema) {
-            return false;
-        }
-    }
-
-    static final class TrackingCompatibilityMockSchemaRegistryClient extends MockSchemaRegistryClient {
-        final java.util.Map<String, String> lastCompatibilityBySubject = new java.util.HashMap<>();
-
-        TrackingCompatibilityMockSchemaRegistryClient() {
-            super(List.of(new ProtobufSchemaProvider()));
-        }
-
-        @Override
-        public String updateCompatibility(String subject, String compatibility) {
-            lastCompatibilityBySubject.put(subject, compatibility);
-            return compatibility;
-        }
-    }
-
     private static String readResource(String path) throws Exception {
-        try (var in = SchemaRegistryRegisterTest.class.getResourceAsStream(path)) {
+        try (InputStream in = SchemaRegisterTest.class.getResourceAsStream(path)) {
             if (in == null) {
                 throw new IllegalArgumentException("Missing test resource: " + path);
             }
@@ -337,7 +310,7 @@ class SchemaRegistryRegisterTest {
 
         // These tests run from a compiled test-classes output directory, which is a real filesystem.
         // So we can locate the resource directory and copy files recursively.
-        var url = SchemaRegistryRegisterTest.class.getResource(resourceRoot);
+        var url = SchemaRegisterTest.class.getResource(resourceRoot);
         if (url == null) {
             throw new IllegalArgumentException("Missing test resource directory: " + resourceRoot);
         }

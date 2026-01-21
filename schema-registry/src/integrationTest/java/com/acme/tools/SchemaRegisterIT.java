@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
 @Tag("integration")
-class SchemaRegistryRegisterIT {
+class SchemaRegisterIT {
 
     @BeforeAll
     static void requireDocker() {
@@ -103,7 +103,7 @@ class SchemaRegistryRegisterIT {
         );
 
         Options options = new Options(false, true, false);
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        SchemaRegister registrar = new SchemaRegister();
         RegistrationResult result = registrar.registerAll(
                 client,
                 url,
@@ -238,7 +238,7 @@ class SchemaRegistryRegisterIT {
                 Map.of()
         );
 
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf.registrar.refs",
@@ -287,7 +287,7 @@ class SchemaRegistryRegisterIT {
                 Map.of()
         );
 
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        SchemaRegister registrar = new SchemaRegister();
 
         SchemaEntry entry = new SchemaEntry(
                 "demo.protobuf.registrar.refs.compat",
@@ -339,7 +339,7 @@ class SchemaRegistryRegisterIT {
     }
 
     private static String readResource(String path) throws Exception {
-        try (InputStream in = SchemaRegistryRegisterIT.class.getResourceAsStream(path)) {
+        try (InputStream in = SchemaRegisterIT.class.getResourceAsStream(path)) {
             if (in == null) {
                 throw new IllegalArgumentException("Missing test resource: " + path);
             }

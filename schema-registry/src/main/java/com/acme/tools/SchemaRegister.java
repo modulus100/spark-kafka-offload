@@ -26,11 +26,11 @@ import java.util.*;
 import java.util.stream.Stream;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-record RegistrarConfig(String schemaRegistryUrl, Integer clientCacheCapacity, List<SchemaEntry> entries) {
+record RegistrarConfig(Integer clientCacheCapacity, List<SchemaEntry> schemas) {
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-record SchemaEntry(String topic, String messageClass, String subject, String subjectStrategy, String compatibility) {
+record SchemaEntry(String topic, String mainMessageClass, String subject, String subjectStrategy, String compatibility) {
 }
 
 record Options(boolean dryRun, boolean failOnIncompatible, boolean verbose) {}
@@ -39,18 +39,18 @@ record RegistrationResult(int registered, int alreadyRegistered, int dryRun, int
 
 record RegistrationContext(String subject, ProtobufSchema schema, String messageClass) {}
 
-public final class SchemaRegistryRegister {
+public final class SchemaRegister {
 
-    private static final Logger log = LoggerFactory.getLogger(SchemaRegistryRegister.class);
+    private static final Logger log = LoggerFactory.getLogger(SchemaRegister.class);
 
-    public SchemaRegistryRegister() {}
+    public SchemaRegister() {}
 
     public static void main(String[] args) throws Exception {
         CliArgs cli = CliArgs.parse(args);
 
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
 
-        SchemaRegistryRegister registrar = new SchemaRegistryRegister();
+        SchemaRegister registrar = new SchemaRegister();
 
         List<RegistrarConfig> configs = registrar.loadConfigs(mapper, cli);
         if (configs.isEmpty()) {
@@ -69,8 +69,8 @@ public final class SchemaRegistryRegister {
         }
 
         String schemaRegistryUrl = cli.schemaRegistryUrlOverride
-                .or(() -> configs.stream().map(RegistrarConfig::schemaRegistryUrl).filter(Objects::nonNull).filter(s -> !s.isBlank()).findFirst())
-                .orElseThrow(() -> new IllegalArgumentException("Missing schemaRegistryUrl (set it in YAML or pass --schema-registry-url)"));
+                .filter(s -> !s.isBlank())
+                .orElseThrow(() -> new IllegalArgumentException("Missing required --schema-registry-url <url>"));
 
         int clientCacheCapacity = cacheCapacity == null ? 1000 : cacheCapacity;
 
@@ -115,6 +115,7 @@ public final class SchemaRegistryRegister {
             if (options.dryRun()) {
                 dryRun++;
                 logDryRun(ctx, options);
+                log.warn("Skipping registration because dryRun=true. subject={} messageClass={}", ctx.subject(), entry.mainMessageClass());
                 continue;
             }
 
@@ -125,6 +126,7 @@ public final class SchemaRegistryRegister {
                 alreadyRegistered++;
                 logSkipAlreadyRegistered(ctx, existingId);
                 updateCompatibilityForReferences(client, ctx.subject(), compatibility);
+                log.warn("Skipping registration because schema is already registered. subject={} existingId={} messageClass={}", ctx.subject(), existingId, entry.mainMessageClass());
                 continue;
             }
 
@@ -133,8 +135,9 @@ public final class SchemaRegistryRegister {
                 boolean compatible = client.testCompatibility(ctx.subject(), ctx.schema());
                 if (!compatible) {
                     incompatible++;
-                    log.warn("[INCOMPATIBLE] subject={} messageClass={}", ctx.subject(), entry.messageClass());
+                    log.warn("[INCOMPATIBLE] subject={} messageClass={}", ctx.subject(), entry.mainMessageClass());
                     if (options.failOnIncompatible()) {
+                        log.warn("Skipping registration because schema is incompatible and failOnIncompatible=true. subject={} messageClass={}", ctx.subject(), entry.mainMessageClass());
                         continue;
                     }
                 }
@@ -164,11 +167,11 @@ public final class SchemaRegistryRegister {
     }
 
     private RegistrationContext buildContext(SchemaEntry entry) throws Exception {
-        Message msg = defaultMessageInstance(entry.messageClass());
+        Message msg = defaultMessageInstance(entry.mainMessageClass());
         Descriptors.Descriptor descriptor = msg.getDescriptorForType();
         ProtobufSchema schema = new ProtobufSchema(descriptor.getFile());
         String subject = resolveSubject(entry, descriptor);
-        return new RegistrationContext(subject, schema, entry.messageClass());
+        return new RegistrationContext(subject, schema, entry.mainMessageClass());
     }
 
     private String resolveSubject(SchemaEntry entry, Descriptors.Descriptor descriptor) {
@@ -189,7 +192,7 @@ public final class SchemaRegistryRegister {
 
     private String normalizeCompatibility(String compatibility) {
         if (compatibility == null || compatibility.isBlank()) {
-            compatibility = "BACKWARD";
+            compatibility = "BACKWARD_TRANSITIVE";
         }
         return compatibility.trim().toUpperCase();
     }
@@ -209,6 +212,7 @@ public final class SchemaRegistryRegister {
         Set<String> updated = new HashSet<>();
         for (var ref : latest.getReferences()) {
             if (ref == null || ref.getSubject() == null || ref.getSubject().isBlank()) {
+                log.warn("Skipping reference compatibility update because reference subject is missing. rootSubject={} reference={}", subject, ref);
                 continue;
             }
             if (updated.add(ref.getSubject())) {
@@ -234,7 +238,7 @@ public final class SchemaRegistryRegister {
     }
 
     private int registerSchema(KafkaProtobufSerializer<Message> serializer, SchemaEntry entry) throws Exception {
-        Message msg = defaultMessageInstance(entry.messageClass());
+        Message msg = defaultMessageInstance(entry.mainMessageClass());
         byte[] payload = serializer.serialize(entry.topic(), msg);
         return extractSchemaId(payload);
     }
@@ -277,11 +281,12 @@ public final class SchemaRegistryRegister {
 
         List<SchemaEntry> entries = new ArrayList<>();
         for (RegistrarConfig cfg : configs) {
-            if (cfg == null || cfg.entries() == null) {
+            if (cfg == null || cfg.schemas() == null) {
+                log.warn("Skipping config because it is missing schemas. config={}", cfg);
                 continue;
             }
 
-            entries.addAll(cfg.entries());
+            entries.addAll(cfg.schemas());
         }
         return entries;
     }
@@ -294,6 +299,7 @@ public final class SchemaRegistryRegister {
 
         for (String p : cli.configPaths) {
             if (p == null || p.isBlank()) {
+                log.warn("Skipping blank --config path");
                 continue;
             }
             orderedUniquePaths.add(Path.of(p).normalize().toAbsolutePath());
@@ -301,6 +307,7 @@ public final class SchemaRegistryRegister {
 
         for (String d : cli.configDirs) {
             if (d == null || d.isBlank()) {
+                log.warn("Skipping blank --config-dir");
                 continue;
             }
             Path dir = Path.of(d);

@@ -70,6 +70,10 @@ final class CliArgs {
             throw new IllegalArgumentException("Provide at least one of --config <path> or --config-dir <dir>");
         }
 
+        if (schemaRegistryUrlOverride == null || schemaRegistryUrlOverride.isBlank()) {
+            throw new IllegalArgumentException("Missing required --schema-registry-url <url>");
+        }
+
         return new CliArgs(
                 List.copyOf(configPaths),
                 List.copyOf(configDirs),

@@ -1,4 +1,3 @@
-schemaRegistryUrl: http://one
-entries:
+schemas:
   - topic: demo.protobuf
-    messageClass: com.acme.demo.v1.DemoEvent
+    mainMessageClass: com.acme.demo.v1.DemoEvent
