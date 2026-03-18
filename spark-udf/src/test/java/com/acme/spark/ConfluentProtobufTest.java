@@ -35,11 +35,17 @@ class ConfluentProtobufTest {
     }
 
     @Test
-    void stripConfluentProtobufFraming_returnsNull_onWrongMagicByte() {
-        byte[] payload = new byte[] {0x01};
-        byte[] framed = frame(1, 0, payload);
-        framed[0] = 1;
-        assertNull(ConfluentProtobuf.stripConfluentProtobufFraming(framed));
+    void stripConfluentProtobufFraming_returnsOriginalValue_forPlainProtobufPayload() {
+        byte[] payload = new byte[] {0x0A, 0x03, 0x66, 0x6F, 0x6F};
+
+        assertSame(payload, ConfluentProtobuf.stripConfluentProtobufFraming(payload));
+    }
+
+    @Test
+    void stripConfluentProtobufFraming_returnsOriginalValue_onNonConfluentPayload() {
+        byte[] payload = new byte[] {0x01, 0x02, 0x03};
+
+        assertSame(payload, ConfluentProtobuf.stripConfluentProtobufFraming(payload));
     }
 
     @Test

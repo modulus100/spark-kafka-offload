@@ -2,10 +2,21 @@ package com.acme.spark;
 
 public final class ConfluentProtobuf {
 
+    private static final int CONFLUENT_MIN_FRAME_SIZE = 6;
+
     private ConfluentProtobuf() {}
 
     public static byte[] stripConfluentProtobufFraming(byte[] value) {
-        if (value == null || value.length < 6) {
+        if (value == null) {
+            return null;
+        }
+
+        byte[] payload = tryStripConfluentProtobufFraming(value);
+        return payload != null ? payload : value[0] == 0 ? null : value;
+    }
+
+    private static byte[] tryStripConfluentProtobufFraming(byte[] value) {
+        if (value.length < CONFLUENT_MIN_FRAME_SIZE) {
             return null;
         }
 
@@ -39,9 +50,9 @@ public final class ConfluentProtobuf {
             return null;
         }
 
-        byte[] payload = new byte[value.length - idx];
-        System.arraycopy(value, idx, payload, 0, payload.length);
-        return payload;
+        byte[] stripped = new byte[value.length - idx];
+        System.arraycopy(value, idx, stripped, 0, stripped.length);
+        return stripped;
     }
 
     private static final class Varint {

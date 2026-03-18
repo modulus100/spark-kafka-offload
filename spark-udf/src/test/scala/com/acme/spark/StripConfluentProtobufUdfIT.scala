@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 class StripConfluentProtobufUdfIT {
 
   @Test
-  def stripConfluentProtobufUdf_worksInSparkSql(): Unit = {
+  def stripConfluentProtobufUdf_decodesConfluentPayloadInSparkSql(): Unit = {
     val spark = SparkSession
       .builder()
       .appName("StripConfluentProtobufUdfIT")
@@ -24,12 +24,7 @@ class StripConfluentProtobufUdfIT {
     try {
       spark.udf.register("strip_confluent", new StripConfluentProtobufUdf(), DataTypes.BinaryType)
 
-      val expected = DemoEvent
-        .newBuilder()
-        .setId("id-123")
-        .setCreatedAtEpochMs(1700000000000L)
-        .setPayload("hello from test")
-        .build()
+      val expected = demoEvent()
 
       val schemaRegistryClient = new MockSchemaRegistryClient()
       val serializer = new KafkaProtobufSerializer[DemoEvent](schemaRegistryClient)
@@ -55,4 +50,39 @@ class StripConfluentProtobufUdfIT {
       spark.stop()
     }
   }
+
+  @Test
+  def stripConfluentProtobufUdf_passesThroughPlainProtobufPayloadInSparkSql(): Unit = {
+    val spark = SparkSession
+      .builder()
+      .appName("StripConfluentProtobufUdfIT")
+      .master("local[1]")
+      .config("spark.ui.enabled", "false")
+      .getOrCreate()
+
+    try {
+      spark.udf.register("strip_confluent", new StripConfluentProtobufUdf(), DataTypes.BinaryType)
+
+      val expected = demoEvent()
+      val plain = expected.toByteArray
+
+      import spark.implicits._
+      val df = Seq(plain).toDF("value")
+
+      val normalized = df.selectExpr("strip_confluent(value) as payload").collect()(0).getAs[Array[Byte]](0)
+      val actual = DemoEvent.parseFrom(normalized)
+
+      assertEquals(expected, actual)
+    } finally {
+      spark.stop()
+    }
+  }
+
+  private def demoEvent(): DemoEvent =
+    DemoEvent
+      .newBuilder()
+      .setId("id-123")
+      .setCreatedAtEpochMs(1700000000000L)
+      .setPayload("hello from test")
+      .build()
 }
